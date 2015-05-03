@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project-module
+  type="WEB"
+  name="ActiveMQSpring"
+  id="myeclipse.1457494216409"
+  context-root="/ActiveMQSpring"
+  j2ee-spec="6.0"
+  archive="ActiveMQSpring.war">
+  <attributes>
+    <attribute name="webrootdir" value="src/main/webapp" />
+  </attributes>
+</project-module>
+
