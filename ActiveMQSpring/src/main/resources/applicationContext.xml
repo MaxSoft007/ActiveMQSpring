@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:amq="http://activemq.apache.org/schema/core"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans   
+        http://www.springframework.org/schema/beans/spring-beans-4.0.xsd   
+        http://www.springframework.org/schema/context   
+        http://www.springframework.org/schema/context/spring-context-4.0.xsd
+        http://activemq.apache.org/schema/core
+        http://activemq.apache.org/schema/core/activemq-core-5.9.0.xsd
+        http://www.springframework.org/schema/tx
+		http://www.springframework.org/schema/tx/spring-tx.xsd
+        http://www.springframework.org/schema/task 
+        http://www.springframework.org/schema/task/spring-task-3.0.xsd
+		http://www.springframework.org/schema/aop
+		http://www.springframework.org/schema/aop/spring-aop.xsd">
+    <!-- 查找最新的schemaLocation 访问 http://www.springframework.org/schema/ -->
+    <bean class="org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor"/>   
+    
+     <!-- 配置扫描路径 -->
+     <context:component-scan base-package="org.maxsoft">
+     	<!-- 只扫描Service，也可以添加Repostory，但是要把Controller排除在外，Controller由spring-mvc.xml去加载 -->
+     	
+     	<!-- 进行扫描带有@Service注解的JavaBean -->
+     	<!-- <context:include-filter type="annotation" expression="org.springframework.stereotype.Service" /> -->
+     	
+     	<!-- 进行扫描带有@Repository注解的JavaBean -->
+     	<!-- <context:include-filter type="annotation" expression="org.springframework.stereotype.Repository" /> -->
+     	
+     	<!-- 进行扫描带有@Component注解的JavaBean -->
+     	<!-- <context:include-filter type="annotation" expression="org.springframework.stereotype.Component" /> -->
+     	
+     	<!-- 不扫描掉带有@Controller注解的JavaBean -->
+     	<context:exclude-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
+     </context:component-scan>
+
+	<!-- ===========开始Quartz调度器的配置============== -->
+	
+    <!-- 开始引入配置文件   -->
+    <!-- 
+    <bean id="propertyConfigurer" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+    	<property name="locations" value="classpath*:application.properties"/>
+    </bean> 
+    -->
+    <bean id="propertyConfigurer" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="locations">
+        	<list>
+        		<value>classpath:application.properties</value>
+        	</list>
+        </property>
+    </bean>
+    <!-- 结束引入配置文件 -->
+	
+	<!-- dataSource 配置 -->
+    <bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource" init-method="init" destroy-method="close">
+        <!-- 基本属性 url、user、password -->
+        <property name="url" value="${jdbc.url}"/>
+        <property name="username" value="${jdbc.username}"/>
+        <property name="password" value="${jdbc.password}"/>
+        <!-- 配置初始化大小、最小、最大 -->
+        <property name="initialSize" value="${ds.initialSize}"/>
+        <property name="minIdle" value="${ds.minIdle}"/>
+        <property name="maxActive" value="${ds.maxActive}"/>
+        <!-- 配置获取连接等待超时的时间 -->
+        <property name="maxWait" value="${ds.maxWait}"/>
+        <!-- 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位是毫秒 -->
+        <property name="timeBetweenEvictionRunsMillis" value="${ds.timeBetweenEvictionRunsMillis}"/>
+        <!-- 配置一个连接在池中最小生存的时间，单位是毫秒 -->
+        <property name="minEvictableIdleTimeMillis" value="${ds.minEvictableIdleTimeMillis}"/>
+        <property name="validationQuery" value="SELECT 'x'"/>
+        <property name="testWhileIdle" value="true"/>
+        <property name="testOnBorrow" value="false"/>
+        <property name="testOnReturn" value="false"/>
+        <!-- 打开PSCache，并且指定每个连接上PSCache的大小 -->
+        <property name="poolPreparedStatements" value="false"/>
+        <property name="maxPoolPreparedStatementPerConnectionSize" value="20"/>
+        <!-- 配置监控统计拦截的filters -->
+        <property name="filters" value="mergeStat"/>
+    </bean>
+    
+	<!-- 声明任务工厂 -->  
+    <bean id="scheduler" autowire="no" class="org.springframework.scheduling.quartz.SchedulerFactoryBean">  
+        <property name="dataSource" ref="dataSource" />
+		<property name="configLocation" value="classpath:quartz.properties" />
+		<!--applicationContextSchedulerContextKey： 
+		是org.springframework.scheduling.quartz.SchedulerFactoryBean这个类中
+		把spring上下 文以key/value的方式存放在了quartz的上下文中了，
+		可以用applicationContextSchedulerContextKey所定义的key得到对应的spring上下文-->  
+		<property name="applicationContextSchedulerContextKey" value="applicationContextKey"/>    
+    </bean>  
+    
+    <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+    	<property name="dataSource" ref="dataSource" />
+    </bean>
+    
+    <!-- 事务管理 通知 -->
+    <tx:advice id="txAdvice" transaction-manager="transactionManager">
+        <tx:attributes>
+            <!-- 对insert,update,delete 开头的方法进行事务管理,只要有异常就回滚 -->
+            <tx:method name="add*" propagation="REQUIRED" rollback-for="java.lang.Throwable"/>
+            <tx:method name="modify*" propagation="REQUIRED" rollback-for="java.lang.Throwable"/>
+            <tx:method name="del*" propagation="REQUIRED" rollback-for="java.lang.Throwable"/>
+            <tx:method name="start*" propagation="REQUIRED" rollback-for="java.lang.Throwable"/>
+            <tx:method name="rest*" propagation="REQUIRED" rollback-for="java.lang.Throwable"/>
+            <tx:method name="stop*" propagation="REQUIRED" rollback-for="java.lang.Throwable"/>
+            <!-- select,count开头的方法,开启只读,提高数据库访问性能 -->
+            <tx:method name="select*" read-only="true"/>
+            <tx:method name="count*" read-only="true"/>
+            <!-- 对其他方法 使用默认的事务管理 -->
+            <tx:method name="*"/>
+        </tx:attributes>
+    </tx:advice>
+    
+    <!-- 事务 aop 配置 -->
+    <aop:config>
+        <aop:pointcut id="serviceMethods" expression="execution(* org.maxsoft.**.service..*(..))"/>
+        <aop:advisor advice-ref="txAdvice" pointcut-ref="serviceMethods"/>
+    </aop:config> 
+    
+    <!-- 配置使Spring采用CGLIB代理 -->
+    <aop:aspectj-autoproxy proxy-target-class="true"/> 
+    
+    <!-- 启用对事务注解的支持 -->
+    <tx:annotation-driven transaction-manager="transactionManager"/>    
+	
+	
+	<!--要调度的对象,工作的bean,注入的service层 -->  
+    <bean id="myJob" class="org.maxsoft.quartz.MyJob"/>  
+    <bean id="myJob1" class="org.maxsoft.quartz.MyJob1"/>  
+	
+	<!-- job的配置开始 --> 
+	 
+    <bean id="myJobDetail" class="org.springframework.scheduling.quartz.MethodInvokingJobDetailFactoryBean">  
+        <property name="targetObject">  
+            <ref bean="myJob"/><!-- 注入的service层 -->  
+        </property>  
+        <property name="targetMethod">  
+            <value>execute</value><!-- 这个是 com.job.quartz.MyJob 类里要执行的方法 -->  
+        </property>  
+        <!-- 将并发设置为false  concurrent为true，则允许一个QuartzJob并发执行，否则就是顺序执行-->  
+        <!--  
+            concurrent属性标识的解释为：对于相同的JobDetail，当指定多个Trigger时, 很可能第一个job完成之前，第二个job就开始了。  
+            					     指定concurrent设为false，多个job不会并发运行，第二个job将不会在第一个job完成之前开始。  
+            					     由此可见，concurrent属性实际是将job推迟执行了。    
+         -->  
+        <property name="concurrent" value="false" />  
+    </bean>
+    
+    <bean id="myJobDetail1" class="org.springframework.scheduling.quartz.MethodInvokingJobDetailFactoryBean">  
+        <property name="targetObject" ref="myJob1"/> 
+        <property name="targetMethod" value="execute"/><!-- 这个是 com.job.quartz.MyJob 类里要执行的方法 --> 
+        <property name="concurrent" value="false" />  
+    </bean>
+    
+    <!-- job的配置结束 -->  
+      
+    <!-- 调度的配置开始  -->  
+    
+    <!-- quartz-1.8以前的配置   
+    <bean id="myJobTrigger" class="org.springframework.scheduling.quartz.CronTriggerBean">  
+        <property name="jobDetail">  
+            <ref bean="myJobDetail"/>  
+        </property>  
+        <property name="cronExpression">  
+            <value>0/1 * * * * ?</value>  
+        </property>  
+    </bean>  
+     --> 
+      
+    <!-- quartz-2.x的配置 -->  
+     
+    <bean id="myJobTrigger" class="org.springframework.scheduling.quartz.CronTriggerFactoryBean">  
+        <!-- 注入需要触发的job -->  
+        <property name="jobDetail">  
+            <ref bean="myJobDetail"/>  
+        </property>  
+        <!-- 每天12:00运行一次 -->  
+		<!-- <property name="cronExpression" value="0 0 12 * * ?" /> -->  
+        <!-- 触发的规则，这里是 每5s触发一次 -->
+        <property name="cronExpression">  
+            <value>0/5 * * * * ?</value>  
+        </property>  
+    </bean>
+    
+    
+    <bean id="simpleTrigger" class="org.springframework.scheduling.quartz.SimpleTriggerFactoryBean">  
+		<property name="jobDetail" ref="myJobDetail1" />  
+		<property name="startDelay" value="0" /><!-- 调度工厂实例化后，经过0秒开始执行调度 -->  
+		<property name="repeatInterval" value="2000" /><!-- 每2秒调度一次 -->  
+	</bean>  
+    
+    
+    <bean id="myJob4" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+    	<property name="jobClass" value="org.maxsoft.quartz.MyJob4"/>
+    	<property name="jobDataAsMap">
+    		<map>  
+				<entry key="timeout" value="0" />  
+			</map> 
+    	</property>
+    	<property name="durability" value="true" /> <!-- durability 表示任务完成之后是否依然保留到数据库，默认false -->
+    </bean>
+    
+    <bean id="simpleTrigger4" class="org.springframework.scheduling.quartz.SimpleTriggerFactoryBean">  
+		<property name="jobDetail" ref="myJob4" />  
+		<property name="startDelay" value="0" /><!-- 调度工厂实例化后，经过0秒开始执行调度 -->  
+		<property name="repeatInterval" value="4000" /><!-- 每2秒调度一次 -->  
+	</bean>  
+	
+	<bean id="myJobTrigger4" class="org.springframework.scheduling.quartz.CronTriggerFactoryBean">  
+        <!-- 注入需要触发的job -->  
+        <property name="jobDetail" ref="myJob4"/>  
+        <property name="cronExpression">  
+            <value>0/7 * * * * ?</value>  
+        </property>  
+    </bean>
+	
+	
+    
+    <!-- 调度的配置结束  --> 
+      
+    <!-- 启动触发器的配置开始 -->
+    
+    <!-- 启动触发器的配置开始  总管理类如果将lazy-init='false'那么容器启动就会执行调度程序   Scheduler代表一个调度容器-->   
+    <bean id="startQuertz" lazy-init="false" class="org.springframework.scheduling.quartz.SchedulerFactoryBean">  
+        <property name="triggers">  
+            <list>  
+                <!--作业调度器,list下可加入其他的调度器-->  
+                <ref bean="myJobTrigger"/>  
+                <ref bean="myJobTrigger4"/>  
+                <ref bean="simpleTrigger"/>  
+                <ref bean="simpleTrigger4"/>  
+            </list>  
+        </property>  
+    </bean>
+    
+    <!-- 启动触发器的配置结束 --> 
+    
+    <!-- Quartz注解配置  开启这个配置，spring才能识别@Scheduled注解  -->
+    <task:annotation-driven scheduler="qbScheduler" mode="proxy"/>  
+    <task:scheduler id="qbScheduler" pool-size="10"/> 
+     
+</beans>
